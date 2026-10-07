@@ -113,6 +113,8 @@ button{font:inherit;cursor:pointer}
 .card .ph{aspect-ratio:4/3;background:linear-gradient(100deg,#1B242D 30%,#2a3743 50%,#1B242D 70%) 0 0/250% 100%;animation:shimmer 1.3s linear infinite;position:relative;overflow:hidden}
 @keyframes shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
 .card .ph img{width:100%;height:100%;object-fit:cover}
+.card .ph img.fade{opacity:0;transition:opacity .35s ease}
+.card .ph img.fade.ok{opacity:1}
 .card .ph.noimg{animation:none;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(-45deg,#171F27 0 12px,#1B242D 12px 24px);color:var(--y)}
 .card .ph.noimg .ico{width:54px;height:54px;stroke-width:1.5}
 .card .tx{padding:18px 18px 20px;display:flex;flex-direction:column;gap:8px;flex:1}
@@ -347,6 +349,7 @@ const COLS = {"Parametres": ["cle", "valeur", "explication"], "Menu": ["ordre", 
 const SID = new URLSearchParams(location.search).get("sheet") || CONFIG.SHEET_ID;
 const S = { tabs: JSON.parse(JSON.stringify(DEFAULTS)), photos: {} };
 const REG = {};
+const CW = (window.innerWidth || 1200) <= 640 ? 600 : 800;   /* largeur demandée pour les photos des cartes */
 let slideTimer = null, lastSig = "", X = {};
 
 /* ---------- outils ---------- */
@@ -589,10 +592,11 @@ function statsHTML() {
 }
 
 function thumb(it, key, icon, title) {
-  const src = img(it[key], 800), fb = fbUrl(it[key], 800);
-  return `<div class="ph ${src ? "" : "noimg"}">${src ? `<img loading="eager" decoding="async" src="${esc(src)}" ${fb ? `data-fb="${esc(fb)}"` : ""} alt="${esc(title)}">` : ico(icon)}</div>`;
+  const src = img(it[key], CW), fb = fbUrl(it[key], CW);
+  const remote = src && !src.startsWith("data:");
+  const tiny = remote && driveId(rawPhoto(it[key])) ? img(it[key], 40) : "";   /* minuscule version floue, arrive presque tout de suite */
+  return `<div class="ph ${src ? "" : "noimg"}" ${tiny ? `style="background:url('${esc(tiny)}') center/cover;animation:none"` : ""}>${src ? `<img class="${remote ? "fade" : ""}" loading="eager" decoding="async" src="${esc(src)}" ${fb ? `data-fb="${esc(fb)}"` : ""} alt="${esc(title)}">` : ico(icon)}</div>`;
 }
-
 function serviceCards(list, kind) {
   REG.services = list;
   return list.map((s, i) => `
@@ -949,6 +953,7 @@ function render(keepScroll) {
   const md = document.querySelector('meta[name="description"]'); if (md && P.description_site) md.content = P.description_site;
   const fav = img("favicon"); const lk = document.querySelector('link[rel="icon"]'); if (lk && fav) lk.href = fav;
   startSlides();
+  markLoaded();
   syncTop();
   if (keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
 }
@@ -998,12 +1003,14 @@ function warm() {
   const add = (v, w) => { const u = img(v, w); if (u && !u.startsWith("data:") && !warmed.has(u)) { warmed.add(u); const i = new Image(); i.decoding = "async"; i.src = u; } };
   const A = kv("Accueil");
   [1, 2, 3, 4].forEach(n => add(A["hero_image_" + n], 1600));
-  (S.tabs.Services || []).forEach(r => add(r.image, 800));
-  (S.tabs.Realisations || []).forEach(r => add(r.image_1, 800));
-  (S.tabs.Equipements || []).forEach(r => add(r.image, 800));
-  (S.tabs.Actualites || []).forEach(r => add(r.image, 800));
+  (S.tabs.Services || []).forEach(r => add(r.image, CW));
+  (S.tabs.Realisations || []).forEach(r => add(r.image_1, CW));
+  (S.tabs.Equipements || []).forEach(r => add(r.image, CW));
+  (S.tabs.Actualites || []).forEach(r => add(r.image, CW));
   (S.tabs.Partenaires || []).forEach(r => add(r.logo, 400));
 }
+document.addEventListener("load", e => { const t = e.target; if (t && t.tagName === "IMG" && t.classList.contains("fade")) t.classList.add("ok"); }, true);
+const markLoaded = () => $$("img.fade").forEach(i => { if (i.complete && i.naturalWidth) i.classList.add("ok"); });
 /* si une photo ne vient pas, on essaie l'autre adresse de Google Drive */
 document.addEventListener("error", e => {
   const t = e.target;
