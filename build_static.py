@@ -49,17 +49,16 @@ def extract_images(t, base):
         ext = {"jpeg":"jpg","svg+xml":"svg"}.get(m.group(1), m.group(1))
         raw = base64.b64decode(m.group(2))
         name = hashlib.sha1(raw).hexdigest()[:12] + "." + ext
-        os.makedirs(os.path.join(ROOT,"img"), exist_ok=True)
-        fp = os.path.join(ROOT,"img",name)
+        fp = os.path.join(ROOT,name)
         if not os.path.exists(fp): open(fp,"wb").write(raw)
-        return base + "img/" + name
+        return base + name
     return re.sub(r"data:image/([\w+]+);base64,([A-Za-z0-9+/=]+)", one, t)
 
 def fix_links(t, base, existing):
     def one(m):
         pg = m.group(1)
         if pg not in existing: return 'href="#/%s"' % pg
-        return 'href="%s"' % ((base or "./") if pg == "accueil" else base + pg + "/")
+        return 'href="%s"' % ("./" if pg == "accueil" else pg + ".html")
     return re.sub(r'href="#/([a-z-]+)(?:\?[^"]*)?"', one, t)
 
 def sri(path):
@@ -87,8 +86,8 @@ def main():
     old_dates = dict(re.findall(r"<loc>([^<]+)</loc><lastmod>([^<]+)</lastmod>", open(old_sm,encoding="utf8").read())) if os.path.exists(old_sm) else {}
     dates = {}
     for r in present:
-        d = snaps[r]; base = "" if r == "accueil" else "../"
-        canon = SITE if r == "accueil" else SITE + r + "/"
+        d = snaps[r]; base = ""
+        canon = SITE if r == "accueil" else SITE + r + ".html"
         desc = d["desc"] if r == "accueil" else (d["lead"] or d["desc"])
         desc = re.sub(r"\s+"," ",desc).strip()[:300]
         try:
@@ -100,22 +99,21 @@ def main():
                   .replace("{{CANON}}",canon).replace("{{SITE}}",SITE).replace("{{LD}}",ld)
                   .replace("{{BASE}}",base).replace("{{SRI}}",sri_app).replace("{{BODY}}",body))
         out = extract_images(out, base)
-        dest = os.path.join(ROOT,"index.html") if r == "accueil" else os.path.join(ROOT,r,"index.html")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        dest = os.path.join(ROOT,"index.html" if r == "accueil" else r + ".html")
         before = open(dest,encoding="utf8").read() if os.path.exists(dest) else None
         if before != out: open(dest,"w",encoding="utf8").write(out)
         dates[canon] = today if (before != out or canon not in old_dates) else old_dates[canon]
         urls.append(canon); print("OK", r, len(out)//1024, "Ko")
     used = set()
     for r in present:
-        dest = os.path.join(ROOT,"index.html") if r == "accueil" else os.path.join(ROOT,r,"index.html")
-        used |= set(re.findall(r"img/([\w.]+)", open(dest,encoding="utf8").read()))
-    for f in os.listdir(os.path.join(ROOT,"img")):
-        if f not in used and not f.startswith("favicon"): os.remove(os.path.join(ROOT,"img",f))
+        dest = os.path.join(ROOT,"index.html" if r == "accueil" else r + ".html")
+        used |= set(re.findall(r"([0-9a-f]{12}\.\w+)", open(dest,encoding="utf8").read()))
+    for f in os.listdir(ROOT):
+        if re.fullmatch(r"[0-9a-f]{12}\.\w+", f) and f not in used: os.remove(os.path.join(ROOT,f))
     sm = ['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     sm += [f"<url><loc>{u}</loc><lastmod>{dates[u]}</lastmod></url>" for u in urls] + ["</urlset>"]
     open(os.path.join(ROOT,"sitemap.xml"),"w",encoding="utf8").write("\n".join(sm)+"\n")
-    open(os.path.join(ROOT,"404.html"),"w",encoding="utf8").write(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Page introuvable — TIMITÉ STRATÉGIE</title></head><body style="font-family:Arial,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#1C2430"><h1>Page introuvable</h1><p>Cette page n'existe pas ou a été déplacée.</p><p><a href="{SITE}">Retour à l'accueil de TIMITÉ STRATÉGIE</a> · <a href="{SITE}contact/">Nous contacter</a></p></body></html>''')
+    open(os.path.join(ROOT,"404.html"),"w",encoding="utf8").write(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Page introuvable — TIMITÉ STRATÉGIE</title></head><body style="font-family:Arial,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#1C2430"><h1>Page introuvable</h1><p>Cette page n'existe pas ou a été déplacée.</p><p><a href="{SITE}">Retour à l'accueil de TIMITÉ STRATÉGIE</a> · <a href="{SITE}contact.html">Nous contacter</a></p></body></html>''')
     print("sitemap + 404 écrits ;", len(urls), "pages")
 
 if __name__ == "__main__":
